@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CalendarDays, MapPin } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { AppHeader } from "@/components/AppHeader";
 import { useSession } from "@/components/RequireAuth";
@@ -26,6 +27,25 @@ export default function BarberDetail() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [preselect, setPreselect] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+
+  // Back from Stripe without paying (cancel_url): release the held slots of that unpaid booking.
+  const abandoned = params.get("cancelled");
+  useEffect(() => {
+    if (!abandoned || !user) return;
+    void (async () => {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", abandoned)
+        .eq("status", "pending_payment");
+      if (!error) toast.info("已取消付款，時段已釋出 / Payment cancelled — slots released");
+      const next = new URLSearchParams(params);
+      next.delete("cancelled");
+      setParams(next, { replace: true });
+      await queryClient.invalidateQueries({ queryKey: ["available_slots", id] });
+    })();
+  }, [abandoned, user, params, setParams, queryClient, id]);
 
   const barberQ = useQuery({
     queryKey: ["barber_detail", id],

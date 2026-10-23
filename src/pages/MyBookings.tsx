@@ -9,6 +9,7 @@ import { useAuthUser, useProfile } from "@/components/RequireAuth";
 import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { errMessage } from "@/lib/errors";
+import { startCheckout } from "@/lib/checkout";
 import { formatMoney, usePlatformSettings } from "@/lib/platformSettings";
 import { DISPLAY_TZ_LABEL, dayFmt, formatRange } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,17 @@ export default function MyBookings() {
     },
   });
 
+  const [paying, setPaying] = useState<string | null>(null);
+  async function pay(id: string) {
+    setPaying(id);
+    try {
+      await startCheckout(id); // navigates to Stripe
+    } catch (e) {
+      setPaying(null);
+      toast.error(errMessage(e));
+    }
+  }
+
   async function cancel(id: string) {
     if (!window.confirm("確定要取消這筆預約嗎？時段會釋出給其他人。")) return;
     // Only the status flips; the DB trigger deletes booking_slots and frees the slots.
@@ -80,7 +92,7 @@ export default function MyBookings() {
           )}
           {rows.map((b) => {
             const st = STATUS[b.status ?? ""] ?? { label: b.status ?? "", className: "bg-muted" };
-            const live = b.status === "pending_payment" || b.status === "paid";
+            const unpaid = b.status === "pending_payment";
             return (
               <article key={b.id} className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-border bg-card p-5">
                 <div className="flex items-start gap-3">
@@ -107,10 +119,15 @@ export default function MyBookings() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className={cn("rounded-full px-3 py-1 text-xs font-medium", st.className)}>{st.label}</span>
-                  {live && b.id && (
-                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => cancel(b.id!)}>
-                      取消 Cancel
-                    </Button>
+                  {unpaid && b.id && (
+                    <>
+                      <Button size="sm" className="rounded-full" disabled={paying === b.id} onClick={() => pay(b.id!)}>
+                        {paying === b.id ? "前往付款…" : "繼續付款 Pay"}
+                      </Button>
+                      <Button size="sm" variant="outline" className="rounded-full" onClick={() => cancel(b.id!)}>
+                        取消 Cancel
+                      </Button>
+                    </>
                   )}
                 </div>
               </article>

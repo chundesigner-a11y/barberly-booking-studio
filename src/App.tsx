@@ -8,6 +8,7 @@ import LoginPage from "@/pages/Login";
 import BarbersBrowse from "@/pages/BarbersBrowse";
 import BarberDetail from "@/pages/BarberDetail";
 import MyBookings from "@/pages/MyBookings";
+import BookingSuccess from "@/pages/BookingSuccess";
 import NotFound from "@/pages/NotFound";
 import ShopOnboarding from "@/pages/shop/ShopOnboarding";
 import ShopBookings from "@/pages/shop/ShopBookings";
@@ -16,7 +17,7 @@ const queryClient = new QueryClient();
 
 // Routes:
 //   public   · /  · /login · /barbers (browse) · /barbers/:id (detail + Book dialog)
-//   customer · /bookings (my bookings)
+//   customer · /bookings (my bookings) · /bookings/success (post-Stripe poll page)
 //   shop     · /shop · /shop/bookings   (profiles.role = 'shop')
 export default function App() {
   return (
@@ -33,6 +34,14 @@ export default function App() {
               element={
                 <RequireAuth>
                   <MyBookings />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/bookings/success"
+              element={
+                <RequireAuth>
+                  <BookingSuccess />
                 </RequireAuth>
               }
             />

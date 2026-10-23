@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { startCheckout } from "@/lib/checkout";
 import { errMessage } from "@/lib/errors";
 import { formatMoney, usePlatformSettings } from "@/lib/platformSettings";
 import { validStarts, type SlotRow } from "@/lib/slots";
@@ -16,9 +17,10 @@ type Service = Tables<"services">;
 const CATEGORY_LABEL: Record<string, string> = { cut: "剪髮", color: "染髮", perm: "燙髮", beard: "修鬍" };
 
 /**
- * Book pop-up over /barbers/:id — service -> date -> start slot -> Confirm.
- * Confirm calls create_booking (1 booking + N booking_slots, status pending_payment)
- * then closes and stays on the page. `onBook` is the single seam M2.1 swaps for Checkout.
+ * Book pop-up over /barbers/:id — service -> date -> start slot -> Confirm & pay.
+ * Confirm calls create_booking (1 booking + N booking_slots, status pending_payment),
+ * then our server opens a Stripe Checkout Session and the browser goes to Stripe.
+ * Only the Stripe webhook marks the booking paid.
  */
 export function BookingDialog({
   open,
@@ -83,17 +85,25 @@ export function BookingDialog({
   async function confirm() {
     if (!service || !startId) return;
     setSubmitting(true);
-    const { error } = await supabase.rpc("create_booking", { p_service_id: service.id, p_start_slot_id: startId });
-    setSubmitting(false);
-    if (error) {
+    const { data: bookingId, error } = await supabase.rpc("create_booking", {
+      p_service_id: service.id,
+      p_start_slot_id: startId,
+    });
+    if (error || !bookingId) {
+      setSubmitting(false);
       const msg = errMessage(error);
       toast.error(msg.includes("just taken") ? "這些時段剛剛被搶走了，請換一個開始時間" : msg);
       await onBooked(); // refresh availability either way
       return;
     }
-    onOpenChange(false);
-    toast.success("預約已建立！可以到「我的預約」查看 / Booking created");
-    await onBooked();
+    try {
+      await startCheckout(bookingId); // navigates to checkout.stripe.com
+    } catch (e) {
+      setSubmitting(false);
+      onOpenChange(false);
+      toast.error(`${errMessage(e)}。預約已保留為「待付款」，可到「我的預約」繼續付款。`);
+      await onBooked();
+    }
   }
 
   return (
@@ -101,7 +111,9 @@ export function BookingDialog({
       <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto rounded-3xl">
         <DialogHeader>
           <DialogTitle className="font-serif text-3xl font-normal">預約 {barberName}</DialogTitle>
-          <DialogDescription>先選服務，再選日期與開始時間（{DISPLAY_TZ_LABEL}）。</DialogDescription>
+          <DialogDescription>
+            先選服務，再選日期與開始時間（{DISPLAY_TZ_LABEL}）。確認後會前往 Stripe 安全付款頁。
+          </DialogDescription>
         </DialogHeader>
 
         <section className="space-y-2">
@@ -206,7 +218,7 @@ export function BookingDialog({
             取消 Cancel
           </Button>
           <Button className="rounded-full px-6" disabled={!service || !startId || submitting} onClick={confirm}>
-            {submitting ? "預約中…" : `確認預約 Confirm${service ? ` · ${formatMoney(service.price, settings)}` : ""}`}
+            {submitting ? "前往付款…" : `確認並付款 Pay${service ? ` ${formatMoney(service.price, settings)}` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

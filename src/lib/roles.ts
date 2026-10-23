@@ -1,7 +1,10 @@
 /**
  * Where a signed-in user lands, decided by profiles.role.
- * M1.1 routes only shop / customer.
+ * shop -> shop dashboard; customer -> marketplace.
+ * admin -> marketplace for now: /admin/payouts does not exist yet, so we must not strand
+ * a newly-promoted admin on a 404. TODO(M2.2): admin -> "/admin/payouts" once the page ships.
  */
 export function homePathForRole(role: string | null | undefined): string {
-  return role === "shop" ? "/shop" : "/barbers";
+  if (role === "shop") return "/shop";
+  return "/barbers";
 }
