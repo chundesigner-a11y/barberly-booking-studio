@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { usePageTitle } from "@/hooks/usePageTitle";
-import { fetchProfile } from "@/components/RequireAuth";
+import { useSession } from "@/components/RequireAuth";
 import { homePathForRole } from "@/lib/roles";
 
 type Role = "customer" | "shop";
@@ -15,6 +15,8 @@ type Role = "customer" | "shop";
 export default function LoginPage() {
   usePageTitle("Sign in or join — Barberly");
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const { reload } = useSession();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [role, setRole] = useState<Role>("customer");
   const [email, setEmail] = useState("");
@@ -43,9 +45,12 @@ export default function LoginPage() {
       setMode("signin");
       return;
     }
-    // Route by profiles.role (shop -> shop dashboard, customer -> customer landing).
-    const profile = await fetchProfile(data.session.user.id);
-    navigate(homePathForRole(profile?.role));
+    // Route by profiles.role (shop -> shop dashboard, customer -> browse), or back to
+    // the page that sent them here (e.g. a barber page where they pressed Book).
+    const profile = await reload();
+    const next = params.get("next");
+    const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+    navigate(safeNext ?? homePathForRole(profile?.role), { replace: true });
   }
 
   return (

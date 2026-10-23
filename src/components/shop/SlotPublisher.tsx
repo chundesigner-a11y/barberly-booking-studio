@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePlatformSettings } from "@/lib/platformSettings";
+import { DISPLAY_TZ_LABEL, dayFmt, timeFmt } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 type Slot = Tables<"bookable_slots">;
 
@@ -17,8 +19,6 @@ function todayLocal(): string {
   return d.toISOString().slice(0, 10);
 }
 
-const timeFmt = new Intl.DateTimeFormat("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: false });
-const dayFmt = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "short" });
 
 /** Publish slot_minutes-long bookable windows for one barber (no status column). */
 export function SlotPublisher({ barberId }: { barberId: string }) {
@@ -44,6 +44,18 @@ export function SlotPublisher({ barberId }: { barberId: string }) {
     },
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: key });
+
+  // Which of my slots are held by a booking (a booking_slots row exists) — those can't be deleted.
+  const slotIds = slots.map((s) => s.id);
+  const { data: held = new Set<string>() } = useQuery({
+    queryKey: ["held_slots", barberId, slotIds.join(",")],
+    enabled: slotIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("booking_slots").select("slot_id").in("slot_id", slotIds);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.slot_id));
+    },
+  });
 
   const minutes = settings.slot_minutes;
   const preview = useMemo(() => {
@@ -88,7 +100,12 @@ export function SlotPublisher({ barberId }: { barberId: string }) {
     await refresh();
   }
 
-  async function removeSlots(ids: string[], confirmText?: string) {
+  async function removeSlots(all: string[], confirmText?: string) {
+    const ids = all.filter((id) => !held.has(id));
+    if (ids.length === 0) {
+      toast.info("已被預約的時段不能刪除");
+      return;
+    }
     if (confirmText && !window.confirm(confirmText)) return;
     const { error } = await supabase.from("bookable_slots").delete().in("id", ids);
     if (error) toast.error(error.message);
@@ -108,7 +125,7 @@ export function SlotPublisher({ barberId }: { barberId: string }) {
     <section className="rounded-3xl border border-border bg-card p-6 md:p-8">
       <h2 className="font-serif text-3xl">可預約時段 / Bookable slots</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        每個時段 {minutes} 分鐘。選一段時間，系統會自動切成一格一格的時段。
+        每個時段 {minutes} 分鐘（{DISPLAY_TZ_LABEL}）。選一段時間，系統會自動切成一格一格的時段。已被預約的時段會標示出來，不能刪除。
       </p>
 
       <form onSubmit={publish} className="mt-6 grid gap-3 rounded-2xl border border-dashed border-border p-5 md:grid-cols-[1.3fr_1fr_1fr_auto] md:items-end">
@@ -152,8 +169,17 @@ export function SlotPublisher({ barberId }: { barberId: string }) {
             </div>
             <div className="flex flex-wrap gap-2">
               {list.map((s) => (
-                <span key={s.id} className="inline-flex items-center gap-1 rounded-full border border-border bg-card py-1 pr-1 pl-3 text-sm">
+                <span
+                  key={s.id}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border py-1 pl-3 text-sm",
+                    held.has(s.id) ? "border-primary bg-primary pr-3 text-primary-foreground" : "border-border bg-card pr-1",
+                  )}
+                >
                   {timeFmt.format(new Date(s.starts_at))}–{timeFmt.format(new Date(s.ends_at))}
+                  {held.has(s.id) ? (
+                    <span className="text-xs opacity-80">· 已預約</span>
+                  ) : (
                   <button
                     type="button"
                     onClick={() => removeSlots([s.id])}
@@ -162,6 +188,7 @@ export function SlotPublisher({ barberId }: { barberId: string }) {
                   >
                     <X className="h-3 w-3" />
                   </button>
+                  )}
                 </span>
               ))}
             </div>

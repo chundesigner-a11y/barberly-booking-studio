@@ -6,13 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { PHOTO_BUCKET, photoUrl } from "@/lib/photos";
 
 type Photo = Tables<"barber_photos">;
-const BUCKET = "barber-photos";
-
-export function photoUrl(path: string): string {
-  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-}
+const BUCKET = PHOTO_BUCKET;
 
 /** Sample hairstyle photos for ONE barber. Files: barber-photos/<barber_id>/<uuid>.<ext>. */
 export function PhotoManager({ barberId }: { barberId: string }) {
