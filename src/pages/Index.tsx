@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 import { useState } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { BadgeCheck, CalendarCheck, Search, ShieldCheck, Star, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import heroLeft from "@/assets/hero-left.jpg";
@@ -8,20 +9,6 @@ import b1 from "@/assets/barber-1.jpg";
 import b2 from "@/assets/barber-2.jpg";
 import b3 from "@/assets/barber-3.jpg";
 import b4 from "@/assets/barber-4.jpg";
-
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Barberly — Find a great barber and book in a few taps" },
-      { name: "description", content: "Discover top-rated barbers and hair stylists near you and book your next cut, color, perm or beard trim online." },
-      { property: "og:title", content: "Barberly — Style with Confident Hair" },
-      { property: "og:description", content: "Discover top-rated barbers and book your next appointment in a few taps." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: Index,
-});
 
 const CHIPS = ["All", "Cut", "Color", "Perm", "Beard"] as const;
 const LOGOS = ["MAISON CUT", "Ironclad", "Velour Salon", "NORTH & CO.", "Atelier Hair", "The Blade Room"];
@@ -38,7 +25,8 @@ const BARBERS = [
   { name: "Jonah Whitfield", shop: "North & Co. · Williamsburg", img: b4, services: ["Cut", "Beard"], rating: 4.9, reviews: 276, from: 30 },
 ];
 
-function Index() {
+export default function Index() {
+  usePageTitle("Barberly — Find a great barber and book in a few taps");
   const [chip, setChip] = useState<(typeof CHIPS)[number]>("All");
   const shown = chip === "All" ? BARBERS : BARBERS.filter((b) => b.services.includes(chip));
 
