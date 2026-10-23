@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { fetchProfile } from "@/components/RequireAuth";
+import { homePathForRole } from "@/lib/roles";
 
 type Role = "customer" | "shop";
 
@@ -27,7 +29,7 @@ export default function LoginPage() {
         ? await supabase.auth.signUp({
             email,
             password,
-            options: { emailRedirectTo: window.location.origin, data: { role } },
+            options: { emailRedirectTo: `${window.location.origin}/login`, data: { role } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
@@ -41,7 +43,9 @@ export default function LoginPage() {
       setMode("signin");
       return;
     }
-    navigate("/barbers");
+    // Route by profiles.role (shop -> shop dashboard, customer -> customer landing).
+    const profile = await fetchProfile(data.session.user.id);
+    navigate(homePathForRole(profile?.role));
   }
 
   return (

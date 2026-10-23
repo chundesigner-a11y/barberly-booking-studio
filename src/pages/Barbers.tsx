@@ -1,67 +1,65 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { Store } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { useAuthUser } from "@/components/RequireAuth";
+import { AppHeader } from "@/components/AppHeader";
+import { useAuthUser, useProfile } from "@/components/RequireAuth";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
+/** Customer landing. Shops are routed to their dashboard (role read from profiles.role). */
 export default function BarbersPage() {
   usePageTitle("Your Barberly");
   const user = useAuthUser();
+  const { profile, refreshProfile } = useProfile();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const isShop = user.user_metadata?.["role"] === "shop";
+  const [upgrading, setUpgrading] = useState(false);
 
-  async function signOut() {
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await supabase.auth.signOut();
-    navigate("/login", { replace: true });
+  if (profile?.role === "shop") {
+    return <Navigate to="/shop" replace />;
+  }
+
+  async function becomeShop() {
+    setUpgrading(true);
+    // RLS: a user may update only their own row; a DB trigger allows only customer -> shop.
+    const { error } = await supabase.from("profiles").update({ role: "shop" }).eq("id", user.id);
+    if (error) {
+      setUpgrading(false);
+      toast.error(error.message);
+      return;
+    }
+    await refreshProfile();
+    toast.success("你的帳號已升級為理髮店 / You're now a shop");
+    navigate("/shop", { replace: true });
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <Link to="/" className="font-serif text-2xl font-semibold tracking-tight">
-            Barberly
-          </Link>
-          <div className="flex min-w-0 items-center gap-3 text-sm">
-            <span className="truncate text-muted-foreground">Hi {user.email}</span>
-            {isShop && (
-              <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
-                barber
-              </span>
-            )}
-            <Button size="sm" className="rounded-full" onClick={signOut}>
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
       <main className="fade-up mx-auto max-w-2xl px-5 py-24 text-center">
-        <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-          {isShop ? "Barber dashboard" : "Discover"}
+        <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Discover</p>
+        <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
+          附近的理髮師即將上線 — 下一個里程碑會加上瀏覽與預約功能。
+        </h1>
+        <p className="mt-6 text-muted-foreground">
+          Barbers near you are coming soon — browse & booking arrive in the next milestone.
         </p>
-        {isShop ? (
-          <>
-            <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
-              理髮師後台即將上線 — 下一個里程碑會加上個人檔案、服務項目與排班管理。
-            </h1>
-            <p className="mt-6 text-muted-foreground">
-              Your barber dashboard is coming soon — profile, services & schedule arrive in the next milestone.
-            </p>
-          </>
-        ) : (
-          <>
-            <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
-              附近的理髮師即將上線 — 下一個里程碑會加上瀏覽與預約功能。
-            </h1>
-            <p className="mt-6 text-muted-foreground">
-              Barbers near you are coming soon — browse & booking arrive in the next milestone.
-            </p>
-          </>
-        )}
+
+        <div className="mx-auto mt-16 max-w-md rounded-3xl border border-border bg-card p-8 text-left shadow-lift">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+              <Store className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="font-serif text-2xl">開店 / Become a shop</h2>
+              <p className="text-sm text-muted-foreground">在 Barberly 上架你的理髮師、服務與時段。</p>
+            </div>
+          </div>
+          <Button onClick={becomeShop} disabled={upgrading} className="mt-6 h-11 w-full rounded-full">
+            {upgrading ? "升級中…" : "我要開店 / Become a shop"}
+          </Button>
+        </div>
       </main>
     </div>
   );
